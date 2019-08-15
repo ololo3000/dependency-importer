@@ -5,7 +5,6 @@ import java.util.Collections;
 import java.util.HashMap;
 import java.util.Map;
 import java.util.Objects;
-import javax.swing.JOptionPane;
 import org.apache.commons.io.FilenameUtils;
 import org.apache.maven.shared.invoker.DefaultInvocationRequest;
 import org.apache.maven.shared.invoker.DefaultInvoker;
@@ -50,13 +49,17 @@ public class DependencyImporter {
 
             String jarPath = info[JAR_PATH];
 
-            if (isBlank(pomPath) || isBlank(jarPath))
+            if (isBlank(pomPath))
                 return;
 
             InvocationRequest req = new DefaultInvocationRequest();
 
+            String mvnOpts = isBlank(jarPath) ?
+                "-Dfile=" + pomPath + " -DpomFile=" + pomPath + " -Dpackaging=pom" :
+                "-Dfile=" + jarPath + " -DpomFile=" + pomPath;
+
             req.setGoals(Collections.singletonList("install:install-file"));
-            req.setMavenOpts("-Dfile=" + jarPath + " -DpomFile=" + pomPath);
+            req.setMavenOpts(mvnOpts);
             req.setBaseDirectory(new File(mvnHomePath));
 
             Invoker invoker = new DefaultInvoker();
@@ -64,10 +67,10 @@ public class DependencyImporter {
             try {
                 invoker.execute(req);
 
-                JOptionPane.showMessageDialog(null, "Library installed " + pomPath + ", " + jarPath);
+                System.out.println("Library installed " + pomPath + ", " + jarPath);
             }
             catch (Exception e) {
-                JOptionPane.showMessageDialog(null, e.getStackTrace(), "Install Error", JOptionPane.ERROR_MESSAGE);
+                System.err.println("Exception occured while" + pomPath + ", " + jarPath + "processing." + e);
             }
         });
     }
