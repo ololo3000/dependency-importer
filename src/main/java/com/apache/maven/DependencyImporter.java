@@ -11,7 +11,7 @@ import org.apache.maven.shared.invoker.DefaultInvoker;
 import org.apache.maven.shared.invoker.InvocationRequest;
 import org.apache.maven.shared.invoker.Invoker;
 
-import static org.codehaus.plexus.util.StringUtils.isBlank;
+import static org.apache.maven.shared.utils.StringUtils.isBlank;
 
 /** */
 public class DependencyImporter {
@@ -22,9 +22,17 @@ public class DependencyImporter {
     private static final int JAR_PATH = 1;
 
     /** */
+    private static final String POM_EXTENSION = "pom";
+
+    /** */
+    private static final  String JAR_EXTENSION = "jar";
+
+    /** */
     public static void main(String[] args) {
-        if (args.length < 1)
-            throw new RuntimeException();
+        if (args.length < 1) {
+            throw new RuntimeException("As an argument to the program, it's required the path to the folder from" +
+                " which all decent libraries will be recursively imported.");
+        }
 
         File dir = new File(args[0]);
 
@@ -41,36 +49,44 @@ public class DependencyImporter {
 
         String mvnHomePath = System.getenv("M2_HOME");
 
-        if (isBlank(mvnHomePath))
-            throw new RuntimeException();
+        if (isBlank(mvnHomePath)) {
+            throw new RuntimeException("The M2_HOME property must be set as an environment property since it's used " +
+                "as the path to local repository folder.");
+        }
 
         dependencies.forEach((name, info) -> {
             String pomPath = info[POM_PATH];
 
             String jarPath = info[JAR_PATH];
 
-            if (isBlank(pomPath))
+            if (isBlank(pomPath) && isBlank(jarPath))
                 return;
 
             InvocationRequest req = new DefaultInvocationRequest();
 
-            String mvnOpts = isBlank(jarPath) ?
-                "-Dfile=" + pomPath + " -DpomFile=" + pomPath + " -Dpackaging=pom" :
-                "-Dfile=" + jarPath + " -DpomFile=" + pomPath;
+            String mvnOpts;
 
-            req.setGoals(Collections.singletonList("install:install-file"));
+            if (isBlank(jarPath))
+                mvnOpts = "-Dfile=" + pomPath + " -DpomFile=" + pomPath + " -Dpackaging=pom" ;
+            else if (isBlank(pomPath))
+                mvnOpts = "-Dfile=" + jarPath;
+            else
+                mvnOpts = "-Dfile=" + jarPath + " -DpomFile=" + pomPath;
+
+            req.setGoals(Collections.singletonList("org.apache.maven.plugins:maven-install-plugin:3.0.0-M1:install-file"));
             req.setMavenOpts(mvnOpts);
             req.setBaseDirectory(new File(mvnHomePath));
 
             Invoker invoker = new DefaultInvoker();
 
+            System.err.println(name + " library installing...");
+
             try {
                 invoker.execute(req);
-
-                System.out.println("Library installed " + pomPath + ", " + jarPath);
             }
             catch (Exception e) {
-                System.err.println("Exception occured while" + pomPath + ", " + jarPath + "processing." + e);
+                System.err.println("Exception occurred while " + name + "processing " +
+                    "[pomPath=" + pomPath + ", jarPath=" + jarPath + ']' + e);
             }
         });
     }
@@ -82,9 +98,6 @@ public class DependencyImporter {
 
         File[] files = dir.listFiles();
 
-        if (files == null)
-            throw new RuntimeException();
-
         for (File file : files) {
             if (file.isDirectory())
                 extractDependencies(dependencies, file);
@@ -95,9 +108,9 @@ public class DependencyImporter {
 
             String[] dependency = dependencies.computeIfAbsent(name, k -> new String[2]);
 
-            if ("pom".equals(ext))
+            if (POM_EXTENSION.equals(ext))
                 dependency[POM_PATH] = file.getAbsolutePath();
-            else if ("jar".equals(ext))
+            else if (JAR_EXTENSION.equals(ext))
                 dependency[JAR_PATH] = file.getAbsolutePath();
         }
     }
